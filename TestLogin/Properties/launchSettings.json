@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "TestLogin": {
+      "commandName": "Project"
+    },
+    "Profile 1": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files\\Autodesk\\Revit 2026\\Revit.exe"
+    }
+  }
+}

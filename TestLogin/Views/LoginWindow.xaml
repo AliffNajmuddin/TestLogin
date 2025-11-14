@@ -1,0 +1,93 @@
+﻿<Window x:Class="TestLogin.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Login Required" 
+        Height="253" 
+        Width="450"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="SingleBorderWindow"
+        Icon="pack://application:,,,/TestLogin;component/Resources/Icons/mimarwhite.png">
+
+    <Grid Margin="20,20,20,15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" MinHeight="41"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Header with logo -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Image Grid.Column="0"
+                   Source="pack://application:,,,/TestLogin;component/Resources/Icons/mimar.png"
+                   Width="50"
+                   Height="36"
+                   VerticalAlignment="Top"
+                   Margin="0,0,8,0"
+                   ToolTip="Company Logo"/>
+
+            <TextBlock Grid.Column="1"
+                       Text="Please login to use TestLogin Add-in"
+                       FontSize="16" FontWeight="Bold" 
+                       HorizontalAlignment="Left" 
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Username -->
+        <TextBlock Grid.Row="1" Grid.Column="0" 
+                   Text="Username:" 
+                   VerticalAlignment="Center" 
+                   Margin="0,0,10,0" Height="22"/>
+        <TextBox Grid.Column="1" 
+                 x:Name="UsernameTextBox" 
+                 VerticalAlignment="Center"
+                 Height="25" Grid.Row="1"/>
+
+        <!-- Password -->
+        <TextBlock Grid.Row="2" Grid.Column="0" 
+                   Text="Password:" 
+                   VerticalAlignment="Top" 
+                   Margin="0,2,10,0" Height="21"/>
+        <PasswordBox Grid.Row="2" Grid.Column="1" 
+                     x:Name="PasswordBox" 
+                     VerticalAlignment="Top" 
+                     Margin="0,6,0,0"
+                     Height="25"/>
+
+        <!-- Remember Me -->
+        <CheckBox Grid.Row="3" Grid.Column="1"
+                  x:Name="RememberMeCheckBox"
+                  Content="Remember me"
+                  Margin="0,4,0,0"
+                  VerticalAlignment="Top" Height="20"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Left" Grid.Column="1" Margin="139,20,0,11" Grid.RowSpan="2" Width="170">
+            <Button x:Name="LoginButton"
+                    Content="Login" 
+                    Click="LoginButton_Click" 
+                    Width="80" 
+                    Height="30" 
+                    Margin="0,0,10,0"/>
+            <Button Content="Cancel" 
+                    Click="CancelButton_Click" 
+                    Width="80" 
+                    Height="30"/>
+        </StackPanel>
+
+    </Grid>
+</Window>
