@@ -1,15 +1,22 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace TestLogin.Models
 {
     public class AuthToken
     {
-        public string AccessToken { get; set; }
-        public string RefreshToken { get; set; }
-        public DateTime ExpiresAt { get; set; }
-        public string TokenType { get; set; } = "Bearer";
+        [JsonPropertyName("token")]
+        public string? Token { get; set; }
 
-        public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
-        public bool IsValid => !string.IsNullOrEmpty(AccessToken) && !IsExpired;
+        [JsonPropertyName("expiresAt")]
+        public DateTime? ExpiresAt { get; set; }
+
+        public bool IsValid()
+        {
+            if (string.IsNullOrEmpty(Token)) return false;
+            return ExpiresAt == null || ExpiresAt > DateTime.UtcNow;
+        }
+
+        public override string ToString() => Token ?? string.Empty;
     }
 }

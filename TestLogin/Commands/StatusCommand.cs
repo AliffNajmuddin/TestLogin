@@ -13,14 +13,31 @@ namespace TestLogin.Commands
             if (AuthenticationService.IsAuthenticated)
             {
                 var user = AuthenticationService.CurrentUser;
-                var token = AuthenticationService.CurrentToken;
+                var token = AuthenticationService.CurrentToken ?? LocalStorageService.LoadToken();
+
+                var userFull = user?.FullName ?? user?.Username ?? "Unknown";
+                var username = user?.Username ?? "Unknown";
+                var role = user?.Role ?? "Unknown";
+
+                string expiresText = "Token information not available";
+                if (token?.ExpiresAt is DateTime expires)
+                {
+                    try
+                    {
+                        expiresText = expires.ToLocalTime().ToString("f");
+                    }
+                    catch
+                    {
+                        expiresText = expires.ToString();
+                    }
+                }
 
                 TaskDialog.Show("Authentication Status",
                     $"✅ Logged In\n\n" +
-                    $"User: {user.FullName}\n" +
-                    $"Username: {user.Username}\n" +
-                    $"Role: {user.Role}\n" +
-                    $"Token expires: {token.ExpiresAt.ToLocalTime():f}");
+                    $"User: {userFull}\n" +
+                    $"Username: {username}\n" +
+                    $"Role: {role}\n" +
+                    $"Token expires: {expiresText}");
             }
             else
             {

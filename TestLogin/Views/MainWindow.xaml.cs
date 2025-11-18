@@ -427,9 +427,20 @@ namespace TestLogin.Views
                 var user = AuthenticationService.CurrentUser;
                 var token = AuthenticationService.CurrentToken;
 
-                UserInfoText.Text = $"Logged in as: {user.Username}";
-                WelcomeText.Text = $"Welcome, {user.FullName}!\n\nSelect elements in Revit to see their information in real-time.";
-                TokenInfoText.Text = $"Token expires: {token.ExpiresAt.ToLocalTime():f}";
+                UserInfoText.Text = $"Logged in as: {user?.Username ?? "Unknown"}";
+                WelcomeText.Text = $"Welcome, {user?.FullName ?? user?.Username ?? "User"}!\n\nSelect elements in Revit to see their information in real-time.";
+
+                // Prefer in-memory token, fall back to persisted token, and guard nulls
+                DateTime? expires = token?.ExpiresAt;
+                if (expires == null)
+                {
+                    var storedToken = LocalStorageService.LoadToken();
+                    expires = storedToken?.ExpiresAt;
+                }
+
+                TokenInfoText.Text = expires.HasValue
+                    ? $"Token expires: {expires.Value.ToLocalTime():f}"
+                    : "Token information not available";
             }
         }
 
