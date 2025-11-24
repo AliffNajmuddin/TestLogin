@@ -13,6 +13,7 @@ namespace TestLogin.Services
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TestLogin");
         private static readonly string CredsPath = Path.Combine(AppFolder, "credentials.json");
         private static readonly string TokenPath = Path.Combine(AppFolder, "token.dat");
+        private static readonly string SettingsPath = Path.Combine(AppFolder, "settings.json");
 
         // Persist credentials; optional plainPassword will be encrypted using DPAPI
         public static void SaveCredentials(StoredCredentials creds, string? plainPassword = null)
@@ -110,6 +111,38 @@ namespace TestLogin.Services
                 if (File.Exists(TokenPath)) File.Delete(TokenPath);
             }
             catch { }
+        }
+
+        // Persist application UI/settings
+        public static void SaveSettings(AppSettings settings)
+        {
+            try
+            {
+                Directory.CreateDirectory(AppFolder);
+                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(SettingsPath, json, Encoding.UTF8);
+            }
+            catch
+            {
+                // ignore persistence failures
+            }
+        }
+
+        public static AppSettings? LoadSettings()
+        {
+            try
+            {
+                if (!File.Exists(SettingsPath))
+                    return null;
+
+                var json = File.ReadAllText(SettingsPath, Encoding.UTF8);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json);
+                return settings;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using TestLogin.Models;
@@ -14,11 +15,11 @@ namespace TestLogin.Views
         {
             InitializeComponent();
 
-            // Try to pre-fill username from stored credentials
+            // Try to pre-fill email from stored credentials (prefer new schema)
             var storedCredentials = LocalStorageService.LoadCredentials();
             if (storedCredentials != null)
             {
-                UsernameTextBox.Text = storedCredentials.Username;
+                UsernameTextBox.Text = storedCredentials.Email ?? storedCredentials.Username ?? string.Empty;
                 RememberMeCheckBox.IsChecked = storedCredentials.RememberMe;
             }
 
@@ -27,7 +28,7 @@ namespace TestLogin.Views
 
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
         {
-            var username = UsernameTextBox.Text?.Trim() ?? string.Empty;
+            var email = UsernameTextBox.Text?.Trim() ?? string.Empty;
             var password = PasswordBox.Password ?? string.Empty;
 
             LoginButton.IsEnabled = false;
@@ -38,26 +39,49 @@ namespace TestLogin.Views
 
             try
             {
-                using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 var api = new ApiAuthService();
-                var result = await api.AuthenticateAsync(username, password, cts.Token);
-
-                // Build stored credentials and persist securely (encrypt password via LocalStorageService)
-                var creds = new StoredCredentials
-                {
-                    Username = username,
-                    RememberMe = RememberMeCheckBox.IsChecked ?? false,
-                    Token = result.AccessToken,
-                    ExpiresAt = result.AccessToken?.ExpiresAt,
-                    LastLogin = System.DateTime.UtcNow
-                };
-                LocalStorageService.SaveCredentials(creds); // Save credentials using the available overload
+                var result = await api.AuthenticateAsync(email, password, cts.Token);
 
                 // Apply bearer token for shared HttpClient usage
                 ApiAuthService.SetBearerToken(result.AccessToken?.Token);
 
+                // If API didn't include user in the auth response, fetch profile from /api/me
+                var user = result.User;
+                if (user == null)
+                {
+                    try
+                    {
+                        using var profileCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                        profileCts.CancelAfter(TimeSpan.FromSeconds(5));
+                        user = await api.GetCurrentUserAsync(profileCts.Token);
+                    }
+                    catch { user = null; }
+                }
+
+                // Build stored credentials and persist securely (encrypt password via LocalStorageService)
+                // Only persist Email/Username (no Name field)
+                var creds = new StoredCredentials
+                {
+                    Email = user?.Email ?? result.User?.Email ?? email,
+                    Username = result.User?.Username ?? email,
+                    RememberMe = RememberMeCheckBox.IsChecked ?? false,
+                    Token = result.AccessToken,
+                    ExpiresAt = result.AccessToken?.ExpiresAt,
+                    LastLogin = DateTime.UtcNow
+                };
+                LocalStorageService.SaveCredentials(creds, password); // pass the plain password so it's encrypted and stored
+
+                // Ensure we always have a minimal UserDto for UI immediately after login (email used as display)
+                var minimalUser = user ?? result.User ?? new UserDto
+                {
+                    Email = email,
+                    Username = email,
+                    FullName = email
+                };
+
                 // Notify AuthenticationService about the authenticated user using typed API
-                AuthenticationService.SetCurrentUser(result.User, result.AccessToken);
+                AuthenticationService.SetCurrentUser(minimalUser, result.AccessToken);
 
                 DialogResult = true;
                 Close();
@@ -91,13 +115,13 @@ namespace TestLogin.Views
 
         private async System.Threading.Tasks.Task AttemptLogin()
         {
-            var username = UsernameTextBox.Text;
+            var email = UsernameTextBox.Text;
             var password = PasswordBox.Password;
             var rememberMe = RememberMeCheckBox.IsChecked ?? false;
 
-            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
-                MessageBox.Show("Please enter both username and password.", "Validation Error",
+                MessageBox.Show("Please enter both email and password.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -106,8 +130,8 @@ namespace TestLogin.Views
             LoginButton.IsEnabled = false;
             LoginButton.Content = "Logging in...";
 
-            // Use authentication service with async call
-            var success = await AuthenticationService.LoginAsync(username, password, rememberMe);
+            // Use authentication service with async call (service accepts identifier param; we pass email)
+            var success = await AuthenticationService.LoginAsync(email, password, rememberMe);
 
             if (success)
             {

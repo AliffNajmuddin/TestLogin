@@ -45,9 +45,19 @@ namespace TestLogin.Views
 
             // Update when authentication state changes
             AuthenticationService.UserLoggedOut += OnUserLoggedOut;
+            AuthenticationService.UserLoggedIn += OnUserLoggedIn;
 
             // Handle element selection in list view - Fixed: Use System.Windows.Controls namespace
             ElementsListView.SelectionChanged += OnElementsListViewSelectionChanged;
+        }
+
+        private void OnUserLoggedIn(object? sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                LoadUserInfo();
+                StatusText.Text = "User profile loaded.";
+            });
         }
 
         private void LoadSettings()
@@ -72,6 +82,12 @@ namespace TestLogin.Views
                 StayOnTop = StayOnTopCheckBox?.IsChecked ?? false
             };
             LocalStorageService.SaveSettings(settings);
+        }
+
+        private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SaveSettings();
+            StatusText.Text = "Settings saved.";
         }
 
         private void ApplyTheme()
@@ -385,7 +401,7 @@ namespace TestLogin.Views
                 // Method 4: Look for any parameter containing "Level"
                 foreach (Parameter param in element.Parameters)
                 {
-                    if (param.Definition.Name.ToLower().Contains("level") &&
+                    if (param.Definition?.Name != null && param.Definition.Name.ToLower().Contains("level") &&
                         param.StorageType == StorageType.ElementId)
                     {
                         var levelId = param.AsElementId();
@@ -422,15 +438,25 @@ namespace TestLogin.Views
 
         private void LoadUserInfo()
         {
-            if (AuthenticationService.IsAuthenticated && AuthenticationService.CurrentUser != null)
+            if (AuthenticationService.IsAuthenticated)
             {
                 var user = AuthenticationService.CurrentUser;
-                var token = AuthenticationService.CurrentToken;
+                // Prefer in-memory token, fall back to persisted token
+                var token = AuthenticationService.CurrentToken ?? LocalStorageService.LoadToken();
 
-                UserInfoText.Text = $"Logged in as: {user?.Username ?? "Unknown"}";
-                WelcomeText.Text = $"Welcome, {user?.FullName ?? user?.Username ?? "User"}!\n\nSelect elements in Revit to see their information in real-time.";
+                // Show user's name if available, otherwise fall back to email/username
+                UserInfoText.Text = $"Logged in as: {user?.FullName ?? user?.Email ?? user?.Username ?? "Unknown"}";
 
-                // Prefer in-memory token, fall back to persisted token, and guard nulls
+                // Prefer API message from token when available (e.g. "Hi Najmuddin Nasmuddin, welcome to home")
+                var display = token?.Message;
+                if (string.IsNullOrWhiteSpace(display))
+                {
+                    // fallback to email/username
+                    display = user?.Email ?? user?.Username ?? "User";
+                }
+
+                WelcomeText.Text = $"{display}!\n\nSelect elements in Revit to see their information in real-time.";
+
                 DateTime? expires = token?.ExpiresAt;
                 if (expires == null)
                 {
@@ -456,15 +482,25 @@ namespace TestLogin.Views
 
         private void ViewProfile_Click(object sender, RoutedEventArgs e)
         {
-            if (AuthenticationService.IsAuthenticated)
+            if (!AuthenticationService.IsAuthenticated)
+                return;
+
+            var user = AuthenticationService.CurrentUser;
+            if (user == null)
             {
-                var user = AuthenticationService.CurrentUser;
                 MessageBox.Show(
-                    $"User Profile:\n\nName: {user.FullName}\nEmail: {user.Email}\nRole: {user.Role}",
+                    "Profile not available.",
                     "User Profile",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    MessageBoxImage.Warning);
+                return;
             }
+
+            MessageBox.Show(
+                $"User Profile:\n\nEmail: {user.Email}\nUsername: {user.Username}\nRole: {user.Role}",
+                "User Profile",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
 
         private async void CheckAllElements_Click(object sender, RoutedEventArgs e)
@@ -567,6 +603,7 @@ namespace TestLogin.Views
 
             // Clean up event handlers
             AuthenticationService.UserLoggedOut -= OnUserLoggedOut;
+            AuthenticationService.UserLoggedIn -= OnUserLoggedIn;
 
             if (ElementsListView != null)
                 ElementsListView.SelectionChanged -= OnElementsListViewSelectionChanged;

@@ -79,7 +79,7 @@
                 <StackPanel Margin="15" Name="LeftPanel">
 
                     <!-- Welcome Section -->
-                    <GroupBox Header="Welcome" Margin="0,0,0,15"
+                    <GroupBox Margin="0,0,0,15"
                               Background="#F0F0F0"
                               Foreground="Black"
                               BorderBrush="#CCCCCC"
@@ -122,12 +122,14 @@
                         </StackPanel>
                     </GroupBox>
 
+
+
                     <!-- Status Section -->
                     <GroupBox Header="Status &amp; Information"
                               Background="#F0F0F0"
                               Foreground="Black"
                               BorderBrush="#CCCCCC"
-                              Name="StatusGroup">
+                              Name="StatusGroup" Height="176">
                         <StackPanel>
                             <TextBlock x:Name="StatusText" 
                                       Text="Select elements in Revit to see their information here."
@@ -158,7 +160,7 @@
                 <StackPanel Margin="15" Name="RightPanel">
 
                     <!-- Selection Info Header -->
-                    <Border Background="#2D2D30" Padding="10" CornerRadius="3" Name="SelectionHeader">
+                    <Border Background="#2D2D30" Padding="10" CornerRadius="0" Name="SelectionHeader">
                         <TextBlock Text="Revit Element Inspector" 
                                   Foreground="White" 
                                   FontSize="14" 
