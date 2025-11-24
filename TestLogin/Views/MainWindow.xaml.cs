@@ -5,7 +5,9 @@ using Autodesk.Revit.UI.Events;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -594,6 +596,39 @@ namespace TestLogin.Views
             }
         }
 
+        // P/Invoke helpers to restore Revit to foreground after plugin closes
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        private const int SW_RESTORE = 9;
+        private const int SW_SHOW = 5;
+
+        private static void BringRevitToFront()
+        {
+            try
+            {
+                var proc = Process.GetCurrentProcess();
+                var h = proc.MainWindowHandle;
+                if (h == IntPtr.Zero)
+                {
+                    // fallback: try to find any window for the process
+                    foreach (ProcessThread t in proc.Threads) { /* no-op: keep simple */ }
+                }
+                if (h != IntPtr.Zero)
+                {
+                    ShowWindow(h, SW_RESTORE);
+                    SetForegroundWindow(h);
+                }
+            }
+            catch
+            {
+                // best-effort; don't throw from UI shutdown
+            }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             _isClosing = true;
@@ -611,6 +646,26 @@ namespace TestLogin.Views
             StopSelectionMonitoring();
 
             base.OnClosed(e);
+
+            // Ensure Revit becomes foreground window again after the plugin window closes
+            TryBringRevitToFrontSafe();
+        }
+
+        private void TryBringRevitToFrontSafe()
+        {
+            // Use dispatcher to run after window destroyed (best-effort).
+            try
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    BringRevitToFront();
+                }));
+            }
+            catch
+            {
+                // swallow
+                BringRevitToFront();
+            }
         }
     }
 }
