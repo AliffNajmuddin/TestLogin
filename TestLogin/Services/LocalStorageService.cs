@@ -27,6 +27,25 @@ namespace TestLogin.Services
                 creds.EncryptedPasswordBase64 = Convert.ToBase64String(protectedBytes);
             }
 
+            // If a token object is present, encrypt it and clear the plaintext Token so it is not written in cleartext
+            if (creds.Token != null)
+            {
+                try
+                {
+                    var tokenJson = JsonSerializer.Serialize(creds.Token);
+                    var tokenBytes = Encoding.UTF8.GetBytes(tokenJson);
+                    var protectedToken = ProtectedData.Protect(tokenBytes, null, DataProtectionScope.CurrentUser);
+                    creds.EncryptedTokenBase64 = Convert.ToBase64String(protectedToken);
+                    creds.Token = null;
+                }
+                catch
+                {
+                    // ignore token-protection failures; do not write plaintext token
+                    creds.EncryptedTokenBase64 = null;
+                    creds.Token = null;
+                }
+            }
+
             creds.LastLogin = DateTime.UtcNow;
 
             var json = JsonSerializer.Serialize(creds, new JsonSerializerOptions { WriteIndented = true });
@@ -42,6 +61,26 @@ namespace TestLogin.Services
 
                 var json = File.ReadAllText(CredsPath, Encoding.UTF8);
                 var creds = JsonSerializer.Deserialize<StoredCredentials>(json);
+
+                if (creds == null)
+                    return null;
+
+                // If an encrypted token blob exists, decrypt and populate Token
+                if (!string.IsNullOrEmpty(creds.EncryptedTokenBase64))
+                {
+                    try
+                    {
+                        var protectedBytes = Convert.FromBase64String(creds.EncryptedTokenBase64);
+                        var bytes = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
+                        var tokenJson = Encoding.UTF8.GetString(bytes);
+                        creds.Token = JsonSerializer.Deserialize<AuthToken>(tokenJson);
+                    }
+                    catch
+                    {
+                        creds.Token = null;
+                    }
+                }
+
                 return creds;
             }
             catch

@@ -18,7 +18,13 @@ namespace TestLogin.Models
         // Encrypted password stored as base64 string (may be null)
         public string? EncryptedPasswordBase64 { get; set; }
 
+        // Encrypted token stored as base64 string (may be null)
+        public string? EncryptedTokenBase64 { get; set; }
+
         // Indicates we have an encrypted password on disk
         public bool HasEncryptedPassword => !string.IsNullOrEmpty(EncryptedPasswordBase64);
+
+        // Indicates we have an encrypted token on disk
+        public bool HasEncryptedToken => !string.IsNullOrEmpty(EncryptedTokenBase64);
     }
 }
