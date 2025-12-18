@@ -27,20 +27,25 @@ namespace TestLogin.Services
                 creds.EncryptedPasswordBase64 = Convert.ToBase64String(protectedBytes);
             }
 
+            // Preserve original token in-memory so we can restore it after serialization
+            var originalToken = creds.Token;
+
             // If a token object is present, encrypt it and clear the plaintext Token so it is not written in cleartext
-            if (creds.Token != null)
+            if (originalToken != null)
             {
                 try
                 {
-                    var tokenJson = JsonSerializer.Serialize(creds.Token);
+                    var tokenJson = JsonSerializer.Serialize(originalToken);
                     var tokenBytes = Encoding.UTF8.GetBytes(tokenJson);
                     var protectedToken = ProtectedData.Protect(tokenBytes, null, DataProtectionScope.CurrentUser);
                     creds.EncryptedTokenBase64 = Convert.ToBase64String(protectedToken);
+
+                    // Remove plaintext token before writing to disk
                     creds.Token = null;
                 }
                 catch
                 {
-                    // ignore token-protection failures; do not write plaintext token
+                    // If protection fails, do not write plaintext token to disk.
                     creds.EncryptedTokenBase64 = null;
                     creds.Token = null;
                 }
@@ -50,6 +55,9 @@ namespace TestLogin.Services
 
             var json = JsonSerializer.Serialize(creds, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(CredsPath, json, Encoding.UTF8);
+
+            // Restore the in-memory Token so callers keep using the token after SaveCredentials
+            creds.Token = originalToken;
         }
 
         public static StoredCredentials? LoadCredentials()
@@ -78,6 +86,21 @@ namespace TestLogin.Services
                     catch
                     {
                         creds.Token = null;
+                    }
+                }
+                else if (creds.Token != null)
+                {
+                    // Migration: legacy file contained a plaintext Token property.
+                    // Encrypt it and write back to disk so future reads use the encrypted blob.
+                    try
+                    {
+                        // SaveCredentials will encrypt creds.Token and persist EncryptedTokenBase64.
+                        // It restores the in-memory Token after writing, so we can call it safely.
+                        SaveCredentials(creds, plainPassword: null);
+                    }
+                    catch
+                    {
+                        // If migration fails, leave creds.Token as-is in-memory but don't throw.
                     }
                 }
 

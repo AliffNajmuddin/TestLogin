@@ -23,100 +23,84 @@ namespace TestLogin.Commands
                 // Try auto-login first (fast, non-blocking primary check)
                 AuthenticationService.TryAutoLogin();
 
-                // If not authenticated at all, prompt user to login
+                // If we are not authenticated, open the dockable pane and instruct the user to sign in there.
                 if (!AuthenticationService.IsAuthenticated)
                 {
-                    var loginWindow = new LoginWindow();
-                    SetWindowOwner(loginWindow, revitWindowHandle);
-                    var loginResult = loginWindow.ShowDialog(); // modal
+                    TryShowPane(commandData);
 
-                    if (!loginResult.HasValue || !loginResult.Value)
-                    {
-                        TaskDialog.Show("Login Required", "You must be logged in to use this feature.");
-                        return Result.Cancelled;
-                    }
+                    // Inform user and abort the command; they should sign in via the panel and re-run the feature.
+                    TaskDialog.Show("Login Required",
+                        "Please sign in using the TestLogin panel (Ribbon → TestLogin → Open Panel). After signing in, re-run the command.");
+                    return Result.Cancelled;
                 }
-                else
+
+                // We have a valid token; ensure CurrentUser is populated (existing restore logic)
+                if (AuthenticationService.CurrentUser == null)
                 {
-                    // We have a valid token, but ensure we have a populated CurrentUser (name/email)
-                    if (AuthenticationService.CurrentUser == null)
+                    var stored = LocalStorageService.LoadCredentials();
+                    var needInteractiveLogin = true;
+
+                    if (stored != null)
                     {
-                        // Try to restore a full profile synchronously using stored credentials (blocking)
-                        var stored = LocalStorageService.LoadCredentials();
-                        var needInteractiveLogin = true;
-
-                        if (stored != null)
+                        var identifier = !string.IsNullOrEmpty(stored.Email) ? stored.Email : stored.Username;
+                        if (!string.IsNullOrEmpty(identifier) && stored.HasEncryptedPassword)
                         {
-                            // prefer email in new schema, otherwise legacy username
-                            var identifier = !string.IsNullOrEmpty(stored.Email) ? stored.Email : stored.Username;
-                            if (!string.IsNullOrEmpty(identifier) && stored.HasEncryptedPassword)
+                            try
                             {
-                                try
+                                var pw = LocalStorageService.GetDecryptedPassword(stored);
+                                if (!string.IsNullOrEmpty(pw))
                                 {
-                                    var pw = LocalStorageService.GetDecryptedPassword(stored);
-                                    if (!string.IsNullOrEmpty(pw))
-                                    {
-                                        // Blocking call: keep startup synchronous so name is available before main window
-                                        var ok = AuthenticationService.LoginAsync(identifier, pw, stored.RememberMe).GetAwaiter().GetResult();
+                                    // Blocking call: keep startup synchronous so name is available before main UI
+                                    var ok = AuthenticationService.LoginAsync(identifier, pw, stored.RememberMe).GetAwaiter().GetResult();
 
-                                        // If login succeeded but CurrentUser still null, try fetching profile using the token
-                                        if (ok)
+                                    if (ok)
+                                    {
+                                        if (AuthenticationService.CurrentUser == null)
                                         {
-                                            if (AuthenticationService.CurrentUser == null)
+                                            try
                                             {
-                                                try
+                                                ApiAuthService.SetBearerToken(AuthenticationService.CurrentToken?.Token);
+                                                using var api = new ApiAuthService();
+                                                using var profileCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                                var user = api.GetCurrentUserAsync(profileCts.Token).GetAwaiter().GetResult();
+                                                if (user != null)
                                                 {
-                                                    // Ensure bearer token is set on shared client
-                                                    ApiAuthService.SetBearerToken(AuthenticationService.CurrentToken?.Token);
-                                                    using var api = new ApiAuthService();
-                                                    using var profileCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                                                    var user = api.GetCurrentUserAsync(profileCts.Token).GetAwaiter().GetResult();
-                                                    if (user != null)
-                                                    {
-                                                        AuthenticationService.SetCurrentUser(user, AuthenticationService.CurrentToken);
-                                                        needInteractiveLogin = false;
-                                                    }
-                                                }
-                                                catch
-                                                {
-                                                    // ignore and fall back to interactive login
-                                                    needInteractiveLogin = true;
+                                                    AuthenticationService.SetCurrentUser(user, AuthenticationService.CurrentToken);
+                                                    needInteractiveLogin = false;
                                                 }
                                             }
-                                            else
+                                            catch
                                             {
-                                                needInteractiveLogin = false;
+                                                needInteractiveLogin = true;
                                             }
+                                        }
+                                        else
+                                        {
+                                            needInteractiveLogin = false;
                                         }
                                     }
                                 }
-                                catch
-                                {
-                                    // fall back to interactive login below
-                                    needInteractiveLogin = true;
-                                }
                             }
-                        }
-
-                        if (needInteractiveLogin)
-                        {
-                            var loginWindow = new LoginWindow();
-                            SetWindowOwner(loginWindow, revitWindowHandle);
-                            var loginResult = loginWindow.ShowDialog(); // modal
-
-                            if (!loginResult.HasValue || !loginResult.Value)
+                            catch
                             {
-                                TaskDialog.Show("Login Required", "You must be logged in to use this feature.");
-                                return Result.Cancelled;
+                                needInteractiveLogin = true;
                             }
                         }
                     }
+
+                    if (needInteractiveLogin)
+                    {
+                        // Open dockable pane and instruct the user to sign in there
+                        TryShowPane(commandData);
+
+                        TaskDialog.Show("Login Required",
+                            "Please sign in using the TestLogin panel (Ribbon → TestLogin → Open Panel). After signing in, re-run the command.");
+                        return Result.Cancelled;
+                    }
                 }
 
-                // At this point we should be authenticated and have user info loaded.
-                var mainWindow = new MainWindow(commandData.Application);
-                SetWindowOwner(mainWindow, revitWindowHandle);
-                mainWindow.Show(); // Modeless - allows Revit interaction
+                // At this point authentication is satisfied; show the panel (user can keep it open)
+                TryShowPane(commandData);
 
                 return Result.Succeeded;
             }
@@ -127,10 +111,40 @@ namespace TestLogin.Commands
             }
         }
 
-        private void SetWindowOwner(Window window, IntPtr parentHandle)
+        private void TryShowPane(ExternalCommandData commandData)
         {
-            var helper = new WindowInteropHelper(window);
-            helper.Owner = parentHandle;
+            try
+            {
+                var paneId = new DockablePaneId(new Guid("B1A2C3D4-1234-4F56-8A9B-1C2D3E4F5A6B"));
+                var pane = commandData.Application.GetDockablePane(paneId);
+                pane.Show();
+            }
+            catch
+            {
+                // Fallback: show DockableMainPane inside a modeless window
+                try
+                {
+                    var revitWindowHandle = commandData.Application.MainWindowHandle;
+                    var fallbackWindow = new Window
+                    {
+                        Title = "TestLogin",
+                        Content = new DockableMainPane(),
+                        Width = 380,
+                        Height = 480,
+                        WindowStartupLocation = WindowStartupLocation.Manual
+                    };
+
+                    // Give Revit the owner so window behaves correctly
+                    var helper = new WindowInteropHelper(fallbackWindow) { Owner = revitWindowHandle };
+
+                    // Show modelessly so Revit remains usable
+                    fallbackWindow.Show();
+                }
+                catch
+                {
+                    // ignore - cannot show pane
+                }
+            }
         }
     }
 }

@@ -38,5 +38,8 @@
     <Resource Include="Resources\Icons\mimar.png" />
     <Resource Include="Resources\Icons\mimarwhite.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Converters\" />
+  </ItemGroup>
 
 </Project>
