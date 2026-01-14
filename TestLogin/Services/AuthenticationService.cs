@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using TestLogin.Models;
+using System.Diagnostics;
+using System.IO;
 
 namespace TestLogin.Services
 {
@@ -17,6 +19,10 @@ namespace TestLogin.Services
 
         // Event raised when a user has been set (login completed / profile fetched)
         public static event EventHandler? UserLoggedIn;
+
+        private static string AppFolder =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TestLogin");
+        private static string SessionPath => Path.Combine(AppFolder, "session.json");
 
         public static void SetCurrentUser(UserDto? user, AuthToken? token)
         {
@@ -35,6 +41,27 @@ namespace TestLogin.Services
                 catch
                 {
                     // ignore persistence errors
+                }
+            }
+
+            // Persist a short-lived session marker to indicate login in THIS process.
+            if (IsAuthenticated)
+            {
+                try
+                {
+                    Directory.CreateDirectory(AppFolder);
+                    var session = new
+                    {
+                        ProcessId = Process.GetCurrentProcess().Id,
+                        TimestampUtc = DateTime.UtcNow,
+                        Username = user?.Username
+                    };
+                    var json = JsonSerializer.Serialize(session);
+                    File.WriteAllText(SessionPath, json, System.Text.Encoding.UTF8);
+                }
+                catch
+                {
+                    // ignore session write failures
                 }
             }
 
@@ -113,6 +140,8 @@ namespace TestLogin.Services
                         try { UserLoggedIn?.Invoke(null, EventArgs.Empty); } catch { }
                     }
 
+                    // NOTE: We do NOT create a session marker here because TryAutoLogin is a background restore.
+                    // The session marker should only be created by an explicit interactive login to the panel.
                     return true;
                 }
 
@@ -169,6 +198,16 @@ namespace TestLogin.Services
             {
                 // Clear persisted secrets (credentials + token)
                 LocalStorageService.ClearStoredSecrets();
+            }
+            catch { }
+
+            try
+            {
+                // Remove the session marker file created on login
+                if (File.Exists(SessionPath))
+                {
+                    File.Delete(SessionPath);
+                }
             }
             catch { }
 

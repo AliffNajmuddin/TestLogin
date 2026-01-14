@@ -26,12 +26,6 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2026.*" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="TestLogin.addin">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
   <!-- Images should be embedded WPF resources and NOT copied as Content.
        Keep only the Resource entries to match your assembly pack URIs. -->
   <ItemGroup>
@@ -40,6 +34,11 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Converters\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mimar">
+      <HintPath>..\..\Revit_Exporter-27\bin\Debug\mimar.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
